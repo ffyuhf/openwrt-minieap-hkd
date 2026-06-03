@@ -1,3 +1,5 @@
+# MiniEAP APK 构建工作流
+# 构建 4 个架构的 APK 包，并在 push 到 main/master 时创建 Release
 name: Build MiniEAP APK Packages
 
 on:
@@ -5,20 +7,31 @@ on:
     branches:
       - main
       - master
+    tags:
+      - 'v*'
   pull_request:
     branches:
       - main
       - master
   workflow_dispatch:
 
+# 同一分支只保留最新一次构建，取消旧的运行
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   SDK_VERSION: '25.12-SNAPSHOT'
   IMMORTALWRT_BASE: 'https://downloads.immortalwrt.org/releases'
 
 jobs:
+  # ============================================================
+  # 构建 job：使用 matrix 并行构建 4 个架构
+  # ============================================================
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - name: 'x86-64'
@@ -43,14 +56,22 @@ jobs:
             unzip zlib1g-dev file wget xsltproc zstd
 
       - name: Setup ccache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .ccache
-          key: ${{ runner.os }}-ccache-${{ matrix.target }}
+          key: ${{ runner.os }}-ccache-${{ matrix.target }}-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-ccache-
+            ${{ runner.os }}-ccache-${{ matrix.target }}-
+
+      - name: Cache ImmortalWrt SDK
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: /opt/sdk
+          key: sdk-${{ env.SDK_VERSION }}-${{ matrix.target }}
 
       - name: Download ImmortalWrt SDK
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           TARGET_NAME="${{ matrix.target }}"
           TARGET_NAME="${TARGET_NAME//\//-}"
@@ -59,7 +80,6 @@ jobs:
           tar --zstd -xf immortalwrt-sdk-*.tar.zst
           rm -f immortalwrt-sdk-*.tar.zst
           mv immortalwrt-sdk-* /opt/sdk
-          echo "SDK_DIR=/opt/sdk" >> $GITHUB_ENV
 
       - name: Link Package Source
         working-directory: /opt/sdk
@@ -71,8 +91,18 @@ jobs:
         run: |
           echo "CONFIG_USE_APK=y" >> .config
           echo "CONFIG_APK=y" >> .config
+          echo "CONFIG_CCACHE=y" >> .config
           echo "CONFIG_PACKAGE_minieap=y" >> .config
           make defconfig
+
+      - name: Configure ccache
+        run: |
+          sudo apt-get install -y ccache
+          ccache --set-config=max_size=500M
+          ccache --set-config=cache_dir=${{ github.workspace }}/.ccache
+          ccache -z
+          echo "PATH=/usr/lib/ccache:$PATH" >> $GITHUB_ENV
+          echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> $GITHUB_ENV
 
       - name: Update Feeds
         working-directory: /opt/sdk
@@ -84,15 +114,19 @@ jobs:
         working-directory: /opt/sdk
         run: |
           make package/minieap/compile V=s -j$(nproc)
-          make package/minieap/install V=s
 
-      - name: Find Build Artifacts
+      - name: Show ccache Stats
+        run: ccache -s
+
+      - name: Collect Build Artifacts
         working-directory: /opt/sdk
         run: |
           mkdir -p artifacts
-          find bin/packages -name "minieap_*.apk" -exec cp {} artifacts/ \;
-          find bin/packages -name "minieap_*.ipk" -exec cp {} artifacts/ \; 2>/dev/null || true
-          ls -lah artifacts/
+          find bin/ -name "minieap*.apk" -exec cp {} artifacts/ \;
+          find bin/ -name "minieap*.ipk" -exec cp {} artifacts/ \; 2>/dev/null || true
+          echo "## 构建产物：${{ matrix.name }}" >> $GITHUB_STEP_SUMMARY
+          ls -lah artifacts/ >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Architecture Artifacts
         uses: actions/upload-artifact@v4
@@ -101,15 +135,43 @@ jobs:
           path: /opt/sdk/artifacts/
           retention-days: 30
 
+  # ============================================================
+  # Release job：所有架构构建完成后，统一创建 Release
+  # 仅在 push 事件（分支或标签）时触发，PR 不创建 Release
+  # ============================================================
+  release:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: packages
           if-no-files-found: warn
 
+      - name: List All Packages
+        run: |
+          echo "# MiniEAP 构建产物汇总" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          find packages/ -type f \( -name "*.apk" -o -name "*.ipk" \) | sort | while read f; do
+            echo "- \`$(basename $f)\` ($(du -h "$f" | cut -f1))" >> $GITHUB_STEP_SUMMARY
+          done
+
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
+          tag_name: build-${{ github.ref_name }}-${{ github.run_number }}
+          name: MiniEAP Build #${{ github.run_number }}
+          body: |
+            MiniEAP 自动构建产物
+
+            - 触发分支: ${{ github.ref_name }}
+            - 构建编号: #${{ github.run_number }}
+            - 提交: ${{ github.sha }}
           files: |
             packages/**/*.apk
             packages/**/*.ipk
@@ -118,27 +180,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate Build Summary
-        run: |
-          echo "# MiniEAP Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Build Artifacts" >> $GITHUB_STEP_SUMMARY
-          for dir in packages/*/; do
-            echo "## $(basename $dir)" >> $GITHUB_STEP_SUMMARY
-            ls -lh "$dir" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          done
-
-      - name: Upload Combined Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: minieap-all-architectures
-          path: packages/**/*.apk
-
+  # ============================================================
+  # Summary job：无论成功失败都生成汇总报告
+  # ============================================================
   summary:
     if: always()
     needs: build
     runs-on: ubuntu-latest
+
     steps:
       - name: Download All Artifacts
         uses: actions/download-artifact@v4
@@ -150,9 +199,14 @@ jobs:
         run: |
           echo "# MiniEAP Build Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Build Artifacts" >> $GITHUB_STEP_SUMMARY
-          for dir in packages/*/; do
-            echo "## $(basename $dir)" >> $GITHUB_STEP_SUMMARY
-            ls -lh "$dir" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-          done
+          if [ -d "packages" ] && [ "$(ls -A packages 2>/dev/null)" ]; then
+            for dir in packages/*/; do
+              if [ -d "$dir" ]; then
+                echo "## $(basename $dir)" >> $GITHUB_STEP_SUMMARY
+                ls -lh "$dir" >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+                echo "" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+          else
+            echo "⚠️ 未找到构建产物" >> $GITHUB_STEP_SUMMARY
+          fi
