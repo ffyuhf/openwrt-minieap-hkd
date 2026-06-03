@@ -23,6 +23,8 @@ concurrency:
 env:
   SDK_VERSION: '25.12-SNAPSHOT'
   IMMORTALWRT_BASE: 'https://downloads.immortalwrt.org/releases'
+  # 提前启用 Node.js 24 运行 GitHub Actions，避免 Node.js 20 弃用警告
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ============================================================
