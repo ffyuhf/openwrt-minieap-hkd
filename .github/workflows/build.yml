@@ -260,6 +260,8 @@ jobs:
             gcc-multilib g++-multilib gettext git libncurses5-dev \
             libssl-dev python3-setuptools rsync swig \
             unzip zlib1g-dev file wget xsltproc zstd
+          # 安装部分 SDK prereq 检查所需的 Python 模块（如 stm32 的 optee-os）
+          pip3 install pyelftools cryptography
 
       - name: Setup ccache
         uses: actions/cache@v4
