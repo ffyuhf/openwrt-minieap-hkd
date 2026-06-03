@@ -1,0 +1,169 @@
+name: Build MiniEAP APK Packages
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      target_arch:
+        description: 'Target architecture'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - x86-64
+          - armvirt-64
+          - mediatek-filogic
+          - qualcommax-ipq807x
+
+env:
+  SDK_VERSION: '25.12.0'
+  IMMORTALWRT_BASE: 'https://downloads.immortalwrt.org/releases'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: 'x86-64'
+            target: 'x86/64'
+            arch_folder: 'x86_64'
+          - name: 'armvirt-64'
+            target: 'armvirt/64'
+            arch_folder: 'aarch64_cortex-a53'
+          - name: 'mediatek-filogic'
+            target: 'mediatek/filogic'
+            arch_folder: 'aarch64_cortex-a53'
+          - name: 'qualcommax-ipq807x'
+            target: 'qualcommax/ipq807x'
+            arch_folder: 'arm_cortex-a53'
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialization Environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses5-dev \
+            libssl-dev python3-distutils python3-setuptools rsync swig \
+            unzip zlib1g-dev file wget xsltproc ccache ecjs
+
+      - name: Setup ccache
+        uses: actions/cache@v3
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-${{ matrix.target }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      - name: Download ImmortalWrt SDK
+        run: |
+          SDK_URL="${{ env.IMMORTALWRT_BASE }}/${{ env.SDK_VERSION }}/targets/${{ matrix.target }}/immortalwrt-sdk-${{ matrix.target }}_gcc-13.2.0_musl.Linux-x86_64.tar.xz"
+          wget -q "${SDK_URL}"
+          tar -xf immortalwrt-sdk-*.tar.xz
+          mv immortalwrt-sdk-* /opt/sdk
+          echo "SDK_DIR=/opt/sdk" >> $GITHUB_ENV
+
+      - name: Link Package Source
+        working-directory: /opt/sdk
+        run: |
+          ln -s $GITHUB_WORKSPACE package/minieap
+
+      - name: Configuration for APK Build
+        working-directory: /opt/sdk
+        run: |
+          echo "CONFIG_USE_APK=y" >> .config
+          echo "CONFIG_APK=y" >> .config
+          echo "CONFIG_PACKAGE_minieap=y" >> .config
+          make defconfig
+
+      - name: Update Feeds
+        working-directory: /opt/sdk
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Build Package
+        working-directory: /opt/sdk
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+        run: |
+          make package/minieap/compile V=s -j$(nproc)
+          make package/minieap/install V=s
+
+      - name: Find Build Artifacts
+        working-directory: /opt/sdk
+        run: |
+          mkdir -p artifacts
+          find bin/packages -name "minieap_*.apk" -exec cp {} artifacts/ \;
+          find bin/packages -name "minieap_*.ipk" -exec cp {} artifacts/ \; 2>/dev/null || true
+          ls -lah artifacts/
+
+      - name: Upload Architecture Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: minieap-${{ matrix.name }}
+          path: /opt/sdk/artifacts/
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: packages
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: packages/**/*.apk
+          files: packages/**/*.ipk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  summary:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: packages
+
+      - name: Generate Build Summary
+        run: |
+          echo "# MiniEAP Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Build Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          for dir in packages/*/; do
+            echo "### $(basename $dir)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            ls -lh "$dir" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: Upload Combined Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: minieap-all-architectures
+          path: packages/**/*.apk
