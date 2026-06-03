@@ -57,6 +57,7 @@ jobs:
           SDK_URL="${{ env.IMMORTALWRT_BASE }}/${{ env.SDK_VERSION }}/targets/${{ matrix.target }}/immortalwrt-sdk-${{ env.SDK_VERSION }}-${TARGET_NAME}_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
           wget -q "${SDK_URL}"
           tar --zstd -xf immortalwrt-sdk-*.tar.zst
+          rm -f immortalwrt-sdk-*.tar.zst
           mv immortalwrt-sdk-* /opt/sdk
           echo "SDK_DIR=/opt/sdk" >> $GITHUB_ENV
 
