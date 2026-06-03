@@ -52,7 +52,9 @@ jobs:
 
       - name: Download ImmortalWrt SDK
         run: |
-          SDK_URL="${{ env.IMMORTALWRT_BASE }}/${{ env.SDK_VERSION }}/targets/${{ matrix.target }}/immortalwrt-sdk-${{ matrix.target }}_gcc-13.2.0_musl.Linux-x86_64.tar.xz"
+          TARGET_NAME="${{ matrix.target }}"
+          TARGET_NAME="${TARGET_NAME//\//-}"
+          SDK_URL="${{ env.IMMORTALWRT_BASE }}/${{ env.SDK_VERSION }}/targets/${{ matrix.target }}/immortalwrt-sdk-${TARGET_NAME}_gcc-14.2.0_musl.Linux-x86_64.tar.xz"
           wget -q "${SDK_URL}"
           tar -xf immortalwrt-sdk-*.tar.xz
           mv immortalwrt-sdk-* /opt/sdk
