@@ -1,5 +1,5 @@
 # MiniEAP APK 构建工作流
-# 构建 4 个架构的 APK 包，并在 push 到 main/master 时创建 Release
+# 构建 ImmortalWrt 全部架构的 APK 包，并在 push 到 main/master 时创建 Release
 name: Build MiniEAP APK Packages
 
 on:
@@ -26,22 +26,226 @@ env:
 
 jobs:
   # ============================================================
-  # 构建 job：使用 matrix 并行构建 4 个架构
+  # 构建 job：使用 matrix 并行构建全部架构
   # ============================================================
   build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 10
       matrix:
         include:
+          # x86
           - name: 'x86-64'
             target: 'x86/64'
+          - name: 'x86-generic'
+            target: 'x86/generic'
+          - name: 'x86-geode'
+            target: 'x86/geode'
+          - name: 'x86-legacy'
+            target: 'x86/legacy'
+          # armsr (ARM System Ready)
+          - name: 'armsr-armv7'
+            target: 'armsr/armv7'
           - name: 'armsr-armv8'
             target: 'armsr/armv8'
+          # mediatek
           - name: 'mediatek-filogic'
             target: 'mediatek/filogic'
+          - name: 'mediatek-mt7622'
+            target: 'mediatek/mt7622'
+          - name: 'mediatek-mt7623'
+            target: 'mediatek/mt7623'
+          - name: 'mediatek-mt7629'
+            target: 'mediatek/mt7629'
+          # qualcommax
+          - name: 'qualcommax-ipq50xx'
+            target: 'qualcommax/ipq50xx'
+          - name: 'qualcommax-ipq60xx'
+            target: 'qualcommax/ipq60xx'
           - name: 'qualcommax-ipq807x'
             target: 'qualcommax/ipq807x'
+          # ipq40xx
+          - name: 'ipq40xx-chromium'
+            target: 'ipq40xx/chromium'
+          - name: 'ipq40xx-generic'
+            target: 'ipq40xx/generic'
+          - name: 'ipq40xx-mikrotik'
+            target: 'ipq40xx/mikrotik'
+          # ipq806x
+          - name: 'ipq806x-chromium'
+            target: 'ipq806x/chromium'
+          - name: 'ipq806x-generic'
+            target: 'ipq806x/generic'
+          # ramips
+          - name: 'ramips-mt7620'
+            target: 'ramips/mt7620'
+          - name: 'ramips-mt7621'
+            target: 'ramips/mt7621'
+          - name: 'ramips-mt76x8'
+            target: 'ramips/mt76x8'
+          - name: 'ramips-rt305x'
+            target: 'ramips/rt305x'
+          - name: 'ramips-rt3883'
+            target: 'ramips/rt3883'
+          # ath79
+          - name: 'ath79-generic'
+            target: 'ath79/generic'
+          - name: 'ath79-mikrotik'
+            target: 'ath79/mikrotik'
+          - name: 'ath79-nand'
+            target: 'ath79/nand'
+          - name: 'ath79-tiny'
+            target: 'ath79/tiny'
+          # bcm27xx (Raspberry Pi)
+          - name: 'bcm27xx-bcm2708'
+            target: 'bcm27xx/bcm2708'
+          - name: 'bcm27xx-bcm2709'
+            target: 'bcm27xx/bcm2709'
+          - name: 'bcm27xx-bcm2710'
+            target: 'bcm27xx/bcm2710'
+          - name: 'bcm27xx-bcm2711'
+            target: 'bcm27xx/bcm2711'
+          - name: 'bcm27xx-bcm2712'
+            target: 'bcm27xx/bcm2712'
+          # bcm47xx / bcm4908 / bcm53xx
+          - name: 'bcm47xx-generic'
+            target: 'bcm47xx/generic'
+          - name: 'bcm47xx-legacy'
+            target: 'bcm47xx/legacy'
+          - name: 'bcm47xx-mips74k'
+            target: 'bcm47xx/mips74k'
+          - name: 'bcm4908-generic'
+            target: 'bcm4908/generic'
+          - name: 'bcm53xx-generic'
+            target: 'bcm53xx/generic'
+          # mvebu
+          - name: 'mvebu-cortexa53'
+            target: 'mvebu/cortexa53'
+          - name: 'mvebu-cortexa72'
+            target: 'mvebu/cortexa72'
+          - name: 'mvebu-cortexa9'
+            target: 'mvebu/cortexa9'
+          # rockchip
+          - name: 'rockchip-armv8'
+            target: 'rockchip/armv8'
+          # sunxi
+          - name: 'sunxi-arm926ejs'
+            target: 'sunxi/arm926ejs'
+          - name: 'sunxi-cortexa53'
+            target: 'sunxi/cortexa53'
+          - name: 'sunxi-cortexa7'
+            target: 'sunxi/cortexa7'
+          - name: 'sunxi-cortexa8'
+            target: 'sunxi/cortexa8'
+          # imx
+          - name: 'imx-cortexa53'
+            target: 'imx/cortexa53'
+          - name: 'imx-cortexa7'
+            target: 'imx/cortexa7'
+          - name: 'imx-cortexa9'
+            target: 'imx/cortexa9'
+          # layerscape
+          - name: 'layerscape-armv7'
+            target: 'layerscape/armv7'
+          - name: 'layerscape-armv8_64b'
+            target: 'layerscape/armv8_64b'
+          # lantiq
+          - name: 'lantiq-xrx200'
+            target: 'lantiq/xrx200'
+          - name: 'lantiq-xrx200_legacy'
+            target: 'lantiq/xrx200_legacy'
+          - name: 'lantiq-xway'
+            target: 'lantiq/xway'
+          # realtek
+          - name: 'realtek-rtl838x'
+            target: 'realtek/rtl838x'
+          - name: 'realtek-rtl839x'
+            target: 'realtek/rtl839x'
+          - name: 'realtek-rtl930x'
+            target: 'realtek/rtl930x'
+          - name: 'realtek-rtl930x_nand'
+            target: 'realtek/rtl930x_nand'
+          - name: 'realtek-rtl931x'
+            target: 'realtek/rtl931x'
+          - name: 'realtek-rtl931x_nand'
+            target: 'realtek/rtl931x_nand'
+          # bmips
+          - name: 'bmips-bcm6318'
+            target: 'bmips/bcm6318'
+          - name: 'bmips-bcm63268'
+            target: 'bmips/bcm63268'
+          - name: 'bmips-bcm6328'
+            target: 'bmips/bcm6328'
+          - name: 'bmips-bcm6358'
+            target: 'bmips/bcm6358'
+          - name: 'bmips-bcm6362'
+            target: 'bmips/bcm6362'
+          - name: 'bmips-bcm6368'
+            target: 'bmips/bcm6368'
+          # apm821xx
+          - name: 'apm821xx-nand'
+            target: 'apm821xx/nand'
+          - name: 'apm821xx-sata'
+            target: 'apm821xx/sata'
+          # mpc85xx
+          - name: 'mpc85xx-p1010'
+            target: 'mpc85xx/p1010'
+          - name: 'mpc85xx-p1020'
+            target: 'mpc85xx/p1020'
+          - name: 'mpc85xx-p2020'
+            target: 'mpc85xx/p2020'
+          # octeon
+          - name: 'octeon-generic'
+            target: 'octeon/generic'
+          # loongarch64
+          - name: 'loongarch64-generic'
+            target: 'loongarch64/generic'
+          # at91
+          - name: 'at91-sam9x'
+            target: 'at91/sam9x'
+          - name: 'at91-sama5'
+            target: 'at91/sama5'
+          - name: 'at91-sama7'
+            target: 'at91/sama7'
+          # malta
+          - name: 'malta-be'
+            target: 'malta/be'
+          - name: 'malta-be64'
+            target: 'malta/be64'
+          - name: 'malta-le'
+            target: 'malta/le'
+          - name: 'malta-le64'
+            target: 'malta/le64'
+          # 其他
+          - name: 'd1-generic'
+            target: 'd1/generic'
+          - name: 'gemini-generic'
+            target: 'gemini/generic'
+          - name: 'ixp4xx-generic'
+            target: 'ixp4xx/generic'
+          - name: 'kirkwood-generic'
+            target: 'kirkwood/generic'
+          - name: 'mxs-generic'
+            target: 'mxs/generic'
+          - name: 'omap-generic'
+            target: 'omap/generic'
+          - name: 'pistachio-generic'
+            target: 'pistachio/generic'
+          - name: 'qoriq-generic'
+            target: 'qoriq/generic'
+          - name: 'sifiveu-generic'
+            target: 'sifiveu/generic'
+          - name: 'siflower-sf21'
+            target: 'siflower/sf21'
+          - name: 'starfive-generic'
+            target: 'starfive/generic'
+          - name: 'stm32-stm32mp1'
+            target: 'stm32/stm32mp1'
+          - name: 'tegra-generic'
+            target: 'tegra/generic'
+          - name: 'zynq-generic'
+            target: 'zynq/generic'
 
     steps:
       - name: Checkout
@@ -153,13 +357,21 @@ jobs:
           path: packages
           if-no-files-found: warn
 
-      - name: List All Packages
+      - name: Rename packages with architecture
         run: |
-          echo "# MiniEAP 构建产物汇总" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          find packages/ -type f \( -name "*.apk" -o -name "*.ipk" \) | sort | while read f; do
-            echo "- \`$(basename $f)\` ($(du -h "$f" | cut -f1))" >> $GITHUB_STEP_SUMMARY
+          mkdir -p release-files
+          find packages/ -type f \( -name "*.apk" -o -name "*.ipk" \) | while read f; do
+            # 提取架构目录名（如 minieap-x86-64 → x86-64）
+            arch_dir=$(dirname "$f" | xargs basename | sed 's/^minieap-//')
+            ext="${f##*.}"
+            base=$(basename "$f" ".$ext")
+            new_name="${base}_${arch_dir}.${ext}"
+            cp "$f" "release-files/${new_name}"
+            echo "重命名: $f → release-files/${new_name}"
           done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 重命名后的产物" >> $GITHUB_STEP_SUMMARY
+          ls -lh release-files/ >> $GITHUB_STEP_SUMMARY
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -173,8 +385,8 @@ jobs:
             - 构建编号: #${{ github.run_number }}
             - 提交: ${{ github.sha }}
           files: |
-            packages/**/*.apk
-            packages/**/*.ipk
+            release-files/*.apk
+            release-files/*.ipk
           draft: false
           prerelease: false
         env:
