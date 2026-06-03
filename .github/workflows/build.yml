@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 env:
-  SDK_VERSION: '25.12.0'
+  SDK_VERSION: '25.12-SNAPSHOT'
   IMMORTALWRT_BASE: 'https://downloads.immortalwrt.org/releases'
 
 jobs:
@@ -23,8 +23,8 @@ jobs:
         include:
           - name: 'x86-64'
             target: 'x86/64'
-          - name: 'armvirt-64'
-            target: 'armvirt/64'
+          - name: 'armsr-armv8'
+            target: 'armsr/armv8'
           - name: 'mediatek-filogic'
             target: 'mediatek/filogic'
           - name: 'qualcommax-ipq807x'
@@ -40,7 +40,7 @@ jobs:
           sudo apt-get install -y build-essential clang flex bison g++ gawk \
             gcc-multilib g++-multilib gettext git libncurses5-dev \
             libssl-dev python3-setuptools rsync swig \
-            unzip zlib1g-dev file wget xsltproc
+            unzip zlib1g-dev file wget xsltproc zstd
 
       - name: Setup ccache
         uses: actions/cache@v3
@@ -54,9 +54,9 @@ jobs:
         run: |
           TARGET_NAME="${{ matrix.target }}"
           TARGET_NAME="${TARGET_NAME//\//-}"
-          SDK_URL="${{ env.IMMORTALWRT_BASE }}/${{ env.SDK_VERSION }}/targets/${{ matrix.target }}/immortalwrt-sdk-${TARGET_NAME}_gcc-14.2.0_musl.Linux-x86_64.tar.xz"
+          SDK_URL="${{ env.IMMORTALWRT_BASE }}/${{ env.SDK_VERSION }}/targets/${{ matrix.target }}/immortalwrt-sdk-${{ env.SDK_VERSION }}-${TARGET_NAME}_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
           wget -q "${SDK_URL}"
-          tar -xf immortalwrt-sdk-*.tar.xz
+          tar --zstd -xf immortalwrt-sdk-*.tar.zst
           mv immortalwrt-sdk-* /opt/sdk
           echo "SDK_DIR=/opt/sdk" >> $GITHUB_ENV
 
